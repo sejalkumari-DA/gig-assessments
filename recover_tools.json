@@ -1,0 +1,128 @@
+[
+  {
+    "name": "write_to_file",
+    "args": {
+      "ArtifactMetadata": {
+        "RequestFeedback": true,
+        "Summary": "Implementation plan for migrating from Google Gemini to AWS Bedrock Claude 3.5 Haiku",
+        "UserFacing": true
+      },
+      "CodeContent": "# Migrate AI Provider from Gemini to AWS Bedrock\n\nThis plan details the process of replacing the Google Gemini AI integration with AWS Bedrock (Claude 3.5 Haiku) for both the Video Profile questions and Audio Assessments as requested.\n\n## User Review Required\n> [!IMPORTANT]\n> You requested \"claude 4.5 haiku\". However, Claude 4.5 does not exist yet. The newest version available on AWS Bedrock is **Claude 3.5 Haiku** (`anthropic.claude-3-5-haiku-20241022-v1:0`) or the standard **Claude 3 Haiku** (`anthropic.claude-3-haiku-20240307-v1:0`).\n>\n> Your `AWS_REGION` is set to `ap-south-1` (Mumbai). I will configure the Bedrock client to use this region and invoke the Claude 3/3.5 Haiku model. **Please confirm if you want me to proceed with Claude 3.5 Haiku, and please ensure that the model is enabled in your AWS Bedrock console for the `ap-south-1` region.**\n\n## Proposed Changes\n\n### Backend Dependencies\nSummary: We will install the official AWS Bedrock SDK to interface with Claude and remove the Google Gemini package.\n\n#### [NEW] AWS SDK Dependency\n- Run `npm install @aws-sdk/client-bedrock-runtime` inside the `backend` directory.\n- Remove `@google/generative-ai` from the backend to keep it clean.\n\n### Backend Application Logic\n\n#### [MODIFY] backend/src/index.ts\n- **Imports:** Replace `import { GoogleGenerativeAI } from '@google/generative-ai'` with `import { BedrockRuntimeClient, InvokeModelCommand } from \"@aws-sdk/client-bedrock-runtime\"`.\n- **Initialization:** Initialize the `BedrockRuntimeClient` using the `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, and `AWS_REGION` from your `.env`.\n- **AI Core Function (`callGemini` -> `callBedrock`):** Rewrite the `callGemini` helper function to invoke the Bedrock runtime. It will format the prompt into Anthropic's required messages schema (`Messages API`) and parse the returned JSON.\n- **Audio Assessment generation:** Ensure the `GET /api/candidates/:id/questions` route correctly uses the new Bedrock helper function to generate the JD-based language exercises and situational questions.\n- **Transcripts Analysis:** Ensure the `translateTranscriptToEnglish` function uses Bedrock for accurate translations.\n\n## Verification Plan\n\n### Automated/Code Verification\n- I will run `npm run build` locally to ensure the TypeScript types align perfectly with the new AWS SDK structure.\n- I will execute a direct test script on the AWS server to verify the Bedrock credentials successfully invoke Claude 3.5 Haiku.\n\n### Manual Verification\n- Once deployed, you will be able to refresh the frontend and test the video/audio assessment question generation.\n- You should observe that the questions are intelligently generated based on the JD language rules without triggering the 503 Service Unavailable errors that Gemini was throwing.",
+      "Description": "Create implementation plan for Bedrock migration",
+      "Overwrite": true,
+      "TargetFile": "C:\\Users\\Sejal Kumari\\.gemini\\antigravity-ide\\brain\\181b41f0-11a8-4cdb-a3fa-dde92a11e868\\implementation_plan.md",
+      "toolAction": "Creating implementation plan",
+      "toolSummary": "Create implementation plan"
+    }
+  },
+  {
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "Replace GoogleGenerativeAI with BedrockRuntimeClient",
+      "Instruction": "Refactor imports and initialization to use AWS Bedrock instead of Google Gemini. Rename `callGemini` to `callBedrock` and implement Bedrock InvokeModelCommand for Claude 3.5 Haiku. Also replace calls to `callGemini` with `callBedrock` throughout the file.",
+      "ReplacementChunks": [
+        {
+          "AllowMultiple": false,
+          "EndLine": 16,
+          "ReplacementContent": "import { BedrockRuntimeClient, InvokeModelCommand } from \"@aws-sdk/client-bedrock-runtime\";\nimport { supabase } from './utils/supabase';\n\ndotenv.config();\n\nconst bedrockClient = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY ? \n  new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'ap-south-1' }) : null;\nconst deepgramApiKey = process.env.DEEPGRAM_API_KEY || '';",
+          "StartLine": 8,
+          "TargetContent": "import { GoogleGenerativeAI } from '@google/generative-ai';\nimport { supabase } from './utils/supabase';\n\ndotenv.config();\n\nconst geminiApiKey = process.env.GEMINI_API_KEY || '';\nconst deepgramApiKey = process.env.DEEPGRAM_API_KEY || '';\nconst genAI = geminiApiKey ? new GoogleGenerativeAI(geminiApiKey) : null;\nconst geminiModel = genAI ? genAI.getGenerativeModel({ model: 'gemini-2.5-flash' }) : null;"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 99,
+          "ReplacementContent": "async function callBedrock(prompt: string, isJson: boolean = false) {\n  if (!bedrockClient) {\n    throw new Error('AWS credentials for Bedrock are not configured.');\n  }\n\n  // Define Claude 3.5 Haiku parameters. (We can also use claude-3-haiku-20240307-v1:0 if 3.5 is unavailable, but ap-south-1 has 3.5 Haiku as anthropic.claude-3-5-haiku-20241022-v1:0)\n  // According to AWS Bedrock documentation for Claude 3 models, the payload format is:\n  const payload = {\n    anthropic_version: \"bedrock-2023-05-31\",\n    max_tokens: 2000,\n    messages: [\n      {\n        role: \"user\",\n        content: [\n          {\n            type: \"text\",\n            text: prompt + (isJson ? \"\\n\\nPlease output ONLY valid JSON without any markdown formatting.\" : \"\")\n          }\n        ]\n      }\n    ],\n    temperature: 0.7\n  };\n\n  const command = new InvokeModelCommand({\n    modelId: \"anthropic.claude-3-5-haiku-20241022-v1:0\",\n    contentType: \"application/json\",\n    accept: \"application/json\",\n    body: JSON.stringify(payload)\n  });\n\n  try {\n    const response = await bedrockClient.send(command);\n    const responseBody = JSON.parse(new TextDecoder().decode(response.body));\n    const responseText = responseBody.content?.[0]?.text || '';\n    return responseText.trim();\n  } catch (error: any) {\n    // Fallback to claude-3-haiku if 3.5 haiku is not available in region\n    if (error.name === 'ValidationException' || error.message?.includes('not found') || error.name === 'ResourceNotFoundException') {\n      console.log('Claude 3.5 Haiku not found or not enabled, falling back to Claude 3 Haiku...');\n      const fallbackCommand = new InvokeModelCommand({\n        modelId: \"anthropic.claude-3-haiku-20240307-v1:0\",\n        contentType: \"application/json\",\n        accept: \"application/json\",\n        body: JSON.stringify(payload)\n      });\n      const response = await bedrockClient.send(fallbackCommand);\n      const responseBody = JSON.parse(new TextDecoder().decode(response.body));\n      const responseText = responseBody.content?.[0]?.text || '';\n      return responseText.trim();\n    }\n    throw error;\n  }\n}",
+          "StartLine": 83,
+          "TargetContent": "async function callGemini(prompt: string, isJson: boolean = false) {\n  if (!geminiModel) {\n    throw new Error('GEMINI_API_KEY is not configured.');\n  }\n\n  const config: any = {};\n  if (isJson) {\n    config.responseMimeType = \"application/json\";\n  }\n\n  const result = await geminiModel.generateContent({\n    contents: [{ role: 'user', parts: [{ text: prompt }] }],\n    generationConfig: config\n  });\n  const responseText = result.response?.text?.() || '';\n  return responseText.trim();\n}"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 112,
+          "ReplacementContent": "    const rawOutput = await callBedrock(translationPrompt);",
+          "StartLine": 112,
+          "TargetContent": "    const rawOutput = await callGemini(translationPrompt);"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 106,
+          "ReplacementContent": "  if (skipAI || !bedrockClient) {",
+          "StartLine": 106,
+          "TargetContent": "  if (skipAI || !geminiModel) {"
+        },
+        {
+          "AllowMultiple": true,
+          "EndLine": 1308,
+          "ReplacementContent": "!bedrockClient",
+          "StartLine": 151,
+          "TargetContent": "!geminiModel"
+        },
+        {
+          "AllowMultiple": true,
+          "EndLine": 1308,
+          "ReplacementContent": "callBedrock(",
+          "StartLine": 151,
+          "TargetContent": "callGemini("
+        },
+        {
+          "AllowMultiple": true,
+          "EndLine": 1308,
+          "ReplacementContent": "via Bedrock",
+          "StartLine": 151,
+          "TargetContent": "via Gemini"
+        }
+      ],
+      "TargetFile": "c:\\Users\\Sejal Kumari\\OneDrive - E-SOLUTIONS IT SERVICES PRIVATE LIMITED\\Documents\\Daily-interview\\backend\\src\\index.ts",
+      "TargetLintErrorIds": [],
+      "toolAction": "Refactoring Gemini to Bedrock in index.ts",
+      "toolSummary": "Refactor to Bedrock"
+    }
+  },
+  {
+    "name": "replace_file_content",
+    "args": {
+      "AllowMultiple": false,
+      "Description": "Add jsonwebtoken import and auth middleware to backend",
+      "EndLine": 19,
+      "Instruction": "Import jsonwebtoken and define the authMiddleware function using JWT_TOKEN from the environment.",
+      "ReplacementContent": "import { supabase } from './utils/supabase';\nimport jwt from 'jsonwebtoken';\n\ndotenv.config();\n\nconst bedrockClient = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY ? \n  new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'ap-south-1' }) : null;\nconst deepgramApiKey = process.env.DEEPGRAM_API_KEY || '';\nconst app = express();\nconst port = process.env.PORT || 5000;\nconst skipAI = process.env.SKIP_AI === '1' || process.env.SKIP_AI === 'true' || process.env.SKIP_OPENAI === '1' || process.env.SKIP_OPENAI === 'true';\n\nconst JWT_SECRET = process.env.JWT_TOKEN || '';\n\nexport const authMiddleware = (req: express.Request, res: express.Response, next: express.NextFunction) => {\n  const authHeader = req.headers.authorization;\n  if (!authHeader || !authHeader.startsWith('Bearer ')) {\n    return res.status(401).json({ success: false, error: 'Unauthorized: No token provided' });\n  }\n\n  const token = authHeader.split(' ')[1];\n  try {\n    const decoded = jwt.verify(token, JWT_SECRET);\n    (req as any).user = decoded;\n    next();\n  } catch (error) {\n    return res.status(401).json({ success: false, error: 'Unauthorized: Invalid token' });\n  }\n};\n",
+      "StartLine": 9,
+      "TargetContent": "import { supabase } from './utils/supabase';\n\ndotenv.config();\n\nconst bedrockClient = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY ? \n  new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'ap-south-1' }) : null;\nconst deepgramApiKey = process.env.DEEPGRAM_API_KEY || '';\nconst app = express();\nconst port = process.env.PORT || 5000;\nconst skipAI = process.env.SKIP_AI === '1' || process.env.SKIP_AI === 'true' || process.env.SKIP_OPENAI === '1' || process.env.SKIP_OPENAI === 'true';",
+      "TargetFile": "c:\\Users\\Sejal Kumari\\OneDrive - E-SOLUTIONS IT SERVICES PRIVATE LIMITED\\Documents\\Daily-interview\\backend\\src\\index.ts",
+      "toolAction": "Adding authMiddleware",
+      "toolSummary": "Add authMiddleware"
+    }
+  },
+  {
+    "name": "multi_replace_file_content",
+    "args": {
+      "Description": "Add AWS Polly endpoint to the backend",
+      "Instruction": "Add PollyClient import and an endpoint for synthesizing speech with AWS Polly",
+      "ReplacementChunks": [
+        {
+          "AllowMultiple": false,
+          "EndLine": 9,
+          "ReplacementContent": "import { BedrockRuntimeClient, InvokeModelCommand } from \"@aws-sdk/client-bedrock-runtime\";\nimport { PollyClient, SynthesizeSpeechCommand, OutputFormat, TextType, VoiceId } from \"@aws-sdk/client-polly\";\nimport { supabase } from './utils/supabase';",
+          "StartLine": 8,
+          "TargetContent": "import { BedrockRuntimeClient, InvokeModelCommand } from \"@aws-sdk/client-bedrock-runtime\";\nimport { supabase } from './utils/supabase';"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 16,
+          "ReplacementContent": "const bedrockClient = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY ?\n  new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'ap-south-1' }) : null;\nconst pollyClient = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY ?\n  new PollyClient({ region: process.env.AWS_REGION || 'ap-south-1' }) : null;\nconst deepgramApiKey = process.env.DEEPGRAM_API_KEY || '';",
+          "StartLine": 14,
+          "TargetContent": "const bedrockClient = process.env.AWS_ACCESS_KEY_ID && process.env.AWS_SECRET_ACCESS_KEY ?\n  new BedrockRuntimeClient({ region: process.env.AWS_REGION || 'ap-south-1' }) : null;\nconst deepgramApiKey = process.env.DEEPGRAM_API_KEY || '';"
+        },
+        {
+          "AllowMultiple": false,
+          "EndLine": 881,
+          "ReplacementContent": "app.post('/api/tts/synthesize', authMiddleware, async (req, res) => {\n  try {\n    if (!pollyClient) {\n      return res.status(500).json({ error: 'Polly client not configured' });\n    }\n    const { text, language } = req.body;\n    if (!text) {\n      return res.status(400).json({ error: 'Text is required' });\n    }\n    \n    let voiceId = 'Matthew'; // Default English\n    const langLower = (language || '').toLowerCase();\n    if (langLower.startsWith('es')) voiceId = 'Lupe';\n    if (langLower.startsWith('fr')) voiceId = 'Lea';\n    if (langLower.startsWith('de')) voiceId = 'Marlene';\n    if (langLower.startsWith('it')) voiceId = 'Bianca';\n    if (langLower.startsWith('ja')) voiceId = 'Takumi';\n    \n    const command = new SynthesizeSpeechCommand({\n      Engine: 'neural', // Use neural voice for high quality\n      Text: text,\n      OutputFormat: OutputFormat.MP3,\n      TextType: TextType.TEXT,\n      VoiceId: voiceId as VoiceId,\n    });\n    \n    const response = await pollyClient.send(command);\n    if (response.AudioStream) {\n      const audioBuffer = await response.AudioStream.transformToByteArray();\n      const base64Audio = Buffer.from(audioBuffer).toString('base64');\n      res.json({ success: true, audioBase64: base64Audio });\n    } else {\n      res.status(500).json({ error: 'Failed to generate audio stream' });\n    }\n  } catch (error: any) {\n    console.error('Error generating Polly TTS:', error);\n    // Fallback to standard if neural is not supported for that voice/region\n    if (error.name === 'ValidationException' && error.message.includes('Neural')) {\n       try {\n         const { text, language } = req.body;\n         let voiceId = 'Matthew';\n         const langLower = (language || '').toLowerCase();\n         if (langLower.startsWith('es')) voiceId = 'Lupe';\n         if (langLower.startsWith('fr')) voiceId = 'Lea';\n         if (langLower.startsWith('de')) voiceId = 'Marlene';\n         if (langLower.startsWith('it')) voiceId = 'Bianca';\n         if (langLower.startsWith('ja')) voiceId = 'Takumi';\n         \n         const standardCommand = new SynthesizeSpeechCommand({\n           Engine: 'standard',\n           Text: text,\n           OutputFormat: OutputFormat.MP3,\n           TextType: TextType.TEXT,\n           VoiceId: voiceId as VoiceId,\n         });\n         const stdResponse = await pollyClient!.send(standardCommand);\n         if (stdResponse.AudioStream) {\n           const audioBuffer = await stdResponse.AudioStream.transformToByteArray();\n           const base64Audio = Buffer.from(audioBuffer).toString('base64');\n           return res.json({ success: true, audioBase64: base64Audio });\n         }\n       } catch (fallbackError) {\n          return res.status(500).json({ error: 'Standard fallback failed' });\n       }\n    }\n    res.status(500).json({ error: error.message });\n  }\n});\n\napp.post('/api/recruiter/login', async (req, res) => {",
+          "StartLine": 881,
+          "TargetContent": "app.post('/api/recruiter/login', async (req, res) => {"
+        }
+      ],
+      "TargetFile": "c:\\Users\\Sejal Kumari\\OneDrive - E-SOLUTIONS IT SERVICES PRIVATE LIMITED\\Documents\\Daily-interview\\backend\\src\\index.ts",
+      "toolAction": "Updating index.ts to add Polly TTS endpoint",
+      "toolSummary": "Update index.ts"
+    }
+  }
+]

@@ -1,0 +1,86 @@
+# Dependency directories
+node_modules/
+jspm_packages/
+web_modules/
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+.pnpm-debug.log*
+
+# Runtime data
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage directory used by tools like istanbul
+coverage
+*.lcov
+.nyc_output
+
+# Compiled binary addons
+build/Release
+
+# TypeScript cache
+*.tsbuildinfo
+
+# Optional npm cache directory
+.npm
+
+# Optional eslint cache
+.eslintcache
+
+# dotenv environment variable files
+.env
+.env.*
+.env.development.local
+.env.test.local
+.env.production.local
+.env.local
+backend/.env
+backend/.env.example
+frontend/.env
+
+# parcel-bundler cache
+.cache
+.parcel-cache
+
+# Next.js build output
+.next
+out
+
+# Mac OSX
+.DS_Store
+
+# IDEs and Editors
+.vscode/
+.idea/
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+
+# Uploaded Media / Temp Files
+backend/upload_errors.log
+backend/*.webm
+backend/*.mp4
+
+# Sensitive Keys and Archives
+*.pem
+*.tar.gz
+
+# Test Scripts with Hardcoded Secrets
+backend/test_*.mjs
+backend/test_*.js
+test_*.mjs
+
+# AI Chat Logs and Dumps
+*.jsonl
+*.txt
+*.js
+!next.config.js
