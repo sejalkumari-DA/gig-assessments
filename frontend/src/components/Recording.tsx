@@ -41,7 +41,7 @@ export default function Recording() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const urlType = searchParams?.get('type');
-  const urlJobId = searchParams?.get('jobId');
+  const urlJobId = searchParams?.get('jobId') || searchParams?.get('job_id');
   const isAudioAssessment = urlType === 'audio' || searchParams?.get('mode') === 'audio-only';
   
   const isAudioOnly = isAudioAssessment;
@@ -54,7 +54,7 @@ export default function Recording() {
     if (urlToken) {
       localStorage.setItem('candidateToken', urlToken);
     }
-    const urlWorkerId = searchParams?.get('workerId');
+    const urlWorkerId = searchParams?.get('workerId') || searchParams?.get('worker_id');
     if (urlWorkerId) {
       localStorage.setItem('candidateId', urlWorkerId);
     }
@@ -77,7 +77,7 @@ export default function Recording() {
     const fetchQuestions = async () => {
       setIsLoadingQuestions(true);
       try {
-        let workerId = searchParams?.get('workerId') || localStorage.getItem('candidateId');
+        let workerId = searchParams?.get('workerId') || searchParams?.get('worker_id') || localStorage.getItem('candidateId');
         if (!workerId) {
           workerId = '05adbc3d-4f00-411c-9797-fdb975cab8c7'; // Test ID provided by user
           localStorage.setItem('candidateId', workerId);

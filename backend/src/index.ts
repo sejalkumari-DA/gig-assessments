@@ -869,6 +869,63 @@ ${resumeText.substring(0, 4000)} // truncate to avoid token limits if necessary
   }
 });
 
+app.post('/api/tts/synthesize', async (req, res) => {
+  try {
+    if (!pollyClient) {
+      return res.status(500).json({ error: 'Polly client not configured' });
+    }
+    const { text, language } = req.body;
+    if (!text) {
+      return res.status(400).json({ error: 'Text is required' });
+    }
+    
+    let voiceId = 'Matthew'; // Force English Male voice as requested
+    
+    const command = new SynthesizeSpeechCommand({
+      Engine: 'neural',
+      Text: text,
+      OutputFormat: OutputFormat.MP3,
+      TextType: TextType.TEXT,
+      VoiceId: voiceId as VoiceId,
+    });
+    
+    const response = await pollyClient.send(command);
+    if (response.AudioStream) {
+      const audioBuffer = await response.AudioStream.transformToByteArray();
+      const base64Audio = Buffer.from(audioBuffer).toString('base64');
+      res.json({ success: true, audioBase64: base64Audio });
+    } else {
+      res.status(500).json({ error: 'Failed to generate audio stream' });
+    }
+  } catch (error: any) {
+    console.error('Error generating Polly TTS:', error);
+    // Fallback to standard if neural is not supported
+    if (error.name === 'ValidationException' && error.message.includes('Neural')) {
+       try {
+         const { text } = req.body;
+         let voiceId = 'Matthew';
+         
+         const standardCommand = new SynthesizeSpeechCommand({
+           Engine: 'standard',
+           Text: text,
+           OutputFormat: OutputFormat.MP3,
+           TextType: TextType.TEXT,
+           VoiceId: voiceId as VoiceId,
+         });
+         const stdResponse = await pollyClient!.send(standardCommand);
+         if (stdResponse.AudioStream) {
+           const audioBuffer = await stdResponse.AudioStream.transformToByteArray();
+           const base64Audio = Buffer.from(audioBuffer).toString('base64');
+           return res.json({ success: true, audioBase64: base64Audio });
+         }
+       } catch (fallbackError) {
+          return res.status(500).json({ error: 'Standard fallback failed' });
+       }
+    }
+    res.status(500).json({ error: error.message });
+  }
+});
+
 app.listen(port, () => {
   console.log(`Backend server running on port ${port} with Supabase`);
 });
