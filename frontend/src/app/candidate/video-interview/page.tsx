@@ -20,7 +20,22 @@ export default function VideoInterviewPage() {
     if (workerIdUrl) setWorkerId(workerIdUrl);
     if (jobIdUrl) setJobId(jobIdUrl);
     if (tokenUrl) setToken(tokenUrl);
-  }, []);
+
+    if (workerIdUrl && jobIdUrl) {
+      localStorage.setItem('candidateId', workerIdUrl);
+      localStorage.setItem('jobId', jobIdUrl);
+      if (tokenUrl) {
+        localStorage.setItem('candidateToken', tokenUrl);
+      }
+      
+      const query = new URLSearchParams({
+        workerId: workerIdUrl,
+        jobId: jobIdUrl,
+        type: 'video-interview'
+      });
+      router.push(`/candidate/recording-html5?${query.toString()}`);
+    }
+  }, [router]);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
