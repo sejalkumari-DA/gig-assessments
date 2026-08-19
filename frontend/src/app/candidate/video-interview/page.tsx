@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -10,6 +10,17 @@ export default function VideoInterviewPage() {
   const [workerId, setWorkerId] = useState('');
   const [jobId, setJobId] = useState('');
   const [token, setToken] = useState('');
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const workerIdUrl = params.get('workerId') || params.get('worker_id');
+    const jobIdUrl = params.get('jobId') || params.get('job_id');
+    const tokenUrl = params.get('token');
+    
+    if (workerIdUrl) setWorkerId(workerIdUrl);
+    if (jobIdUrl) setJobId(jobIdUrl);
+    if (tokenUrl) setToken(tokenUrl);
+  }, []);
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
