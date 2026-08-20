@@ -217,12 +217,14 @@ export default function Recording() {
     }
   };
 
-  const handleStartRecording = () => {
-    setRecordedChunks([]);
+  const handleStartRecording = (isRetakingLast = false) => {
+    if (!isRetakingLast) {
+      setRecordedChunks([]);
+      setCurrentQuestionIndex(0);
+    }
     setVideoBlob(null);
     setAudioBlob(null);
     setTimeLeft(90);
-    setCurrentQuestionIndex(0);
     setIsPaused(false);
     setRecognitionError(null);
 
@@ -452,19 +454,34 @@ export default function Recording() {
     }
   };
 
-  const handleRetakeCurrentQuestion = () => {
-    // 1. Clear ONLY the current question's transcript
-    currentQuestionTranscriptRef.current = '';
-    interimTranscriptRef.current = '';
-    setCurrentQuestionTranscript('');
-    setInterimTranscript('');
+  const handleRetake = () => {
+    if (videoBlob || audioBlob) {
+      // Retaking the final question from the review screen
+      setVideoBlob(null);
+      setAudioBlob(null);
+      // We keep recordedChunks intact to append the retake
+      
+      transcriptsByQuestionRef.current.pop();
+      setTranscriptsByQuestion([...transcriptsByQuestionRef.current]);
+      
+      setIsPaused(true); // Put them back into paused state for the last question
+    } else {
+      // Retaking the previous question while paused between questions
+      if (currentQuestionIndex > 0) {
+        setCurrentQuestionIndex((prev) => prev - 1);
+        transcriptsByQuestionRef.current.pop();
+        setTranscriptsByQuestion([...transcriptsByQuestionRef.current]);
+      }
+    }
     
-    // 2. Re-calculate full transcript without the bad attempt
     const fullFlushed = transcriptsByQuestionRef.current.join(' ').trim();
     transcriptRef.current = fullFlushed;
     setTranscript(fullFlushed);
     
-    // 3. Reset UI state for recording the current question
+    currentQuestionTranscriptRef.current = '';
+    interimTranscriptRef.current = '';
+    setCurrentQuestionTranscript('');
+    setInterimTranscript('');
     setRecognitionError(null);
     setTimeLeft(90);
     
@@ -482,6 +499,12 @@ export default function Recording() {
 
   const handleStartOrResume = () => {
     if (isPaused) {
+      // If we hit Retake on the final screen, mediaRecorder is inactive. We need a new one that appends.
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state === 'inactive') {
+        handleStartRecording(true);
+        return;
+      }
+      
       // Not resuming MediaRecorders since we didn't pause them
       if (recognitionRef.current) {
         try {
@@ -496,37 +519,16 @@ export default function Recording() {
     }
   };
 
-  const handleRetake = () => {
-    setVideoBlob(null);
-    setAudioBlob(null);
-    setRecordedChunks([]);
-    transcriptRef.current = '';
-    interimTranscriptRef.current = '';
-    currentQuestionTranscriptRef.current = '';
-    transcriptsByQuestionRef.current = [];
-    setTranscriptsByQuestion([]);
-    setTranscript('');
-    setCurrentQuestionTranscript('');
-    setInterimTranscript('');
-    setRecognitionError(null);
-    setCurrentQuestionIndex(0);
-    setIsPaused(false);
-    setTimeLeft(90);
-    if ('speechSynthesis' in window) {
-      window.speechSynthesis.cancel();
-    }
-    if (pollyAudioRef.current) {
-      pollyAudioRef.current.pause();
-      pollyAudioRef.current = null;
-    }
-    setPollyState('idle');
-    setTtsState('idle');
-    setTtsHighlight(null);
+  useEffect(() => {
     startCamera(isCameraOn);
     if (videoRef.current) {
       videoRef.current.controls = false;
     }
-  };
+    
+    return () => {
+      handleStopRecording();
+    };
+  }, [isCameraOn]);
 
   const handleUpload = async () => {
     console.log("=== FRONTEND UPLOAD DEBUG ===");
@@ -883,7 +885,7 @@ export default function Recording() {
                     {isPaused && (
                       <>
                         <button
-                          onClick={handleRetakeCurrentQuestion}
+                          onClick={handleRetake}
                           className="border border-border hover:bg-muted text-foreground text-sm font-medium px-6 py-2.5 rounded-md transition-colors"
                         >
                           Retake
