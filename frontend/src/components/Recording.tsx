@@ -888,7 +888,7 @@ export default function Recording() {
                         >
                           Retake
                         </button>
-                        {!isAudioOnly && currentQuestionTranscript && (
+                        {!isAudioOnly && (currentQuestionTranscript || transcriptsByQuestion.length > 0) && (
                           <button
                             onClick={() => setShowTranscriptModal(true)}
                             className="border border-primary text-primary hover:bg-primary/5 text-sm font-medium px-4 py-2.5 rounded-md transition-colors flex items-center gap-2"
@@ -915,7 +915,7 @@ export default function Recording() {
                   >
                     Retake
                   </button>
-                  {!isAudioOnly && transcript && (
+                  {!isAudioOnly && (transcript || transcriptsByQuestion.length > 0) && (
                     <button
                       onClick={() => setShowTranscriptModal(true)}
                       disabled={isUploading}
@@ -999,8 +999,21 @@ export default function Recording() {
               </button>
             </div>
             <div className="p-6 overflow-y-auto flex-1">
-              {currentQuestionTranscript ? (
-                <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{currentQuestionTranscript}</p>
+              {(transcriptsByQuestion.length > 0 || currentQuestionTranscript) ? (
+                <div className="space-y-4">
+                  {transcriptsByQuestion.map((t, i) => (
+                    <div key={i}>
+                      <h4 className="font-semibold text-primary">Question {i + 1}</h4>
+                      <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{t || "(No transcript captured)"}</p>
+                    </div>
+                  ))}
+                  {currentQuestionTranscript && (
+                    <div>
+                      <h4 className="font-semibold text-primary">Question {transcriptsByQuestion.length + 1}</h4>
+                      <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{currentQuestionTranscript}</p>
+                    </div>
+                  )}
+                </div>
               ) : (
                 <p className="text-sm italic text-muted-foreground text-center py-8">No transcript captured. Ensure your microphone was picking up your voice clearly.</p>
               )}
