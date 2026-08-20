@@ -30,6 +30,12 @@ export default function Recording() {
   const recognitionRef = useRef<any>(null);
   const transcriptRef = useRef('');
   const interimTranscriptRef = useRef('');
+  
+  const [currentQuestionTranscript, setCurrentQuestionTranscript] = useState('');
+  const currentQuestionTranscriptRef = useRef('');
+  const [transcriptsByQuestion, setTranscriptsByQuestion] = useState<string[]>([]);
+  const transcriptsByQuestionRef = useRef<string[]>([]);
+  
   const isRecordingRef = useRef(false);
   const [questions, setQuestions] = useState<string[]>([]);
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
@@ -307,9 +313,17 @@ export default function Recording() {
             let currentInterim = '';
             for (let i = event.resultIndex; i < event.results.length; ++i) {
               if (event.results[i].isFinal) {
-                const flushed = `${transcriptRef.current} ${event.results[i][0].transcript}`.trim();
-                transcriptRef.current = flushed;
-                setTranscript(flushed);
+                const newlyRecognized = event.results[i][0].transcript;
+                
+                // Update Current Question Transcript
+                const currentFlushed = `${currentQuestionTranscriptRef.current} ${newlyRecognized}`.trim();
+                currentQuestionTranscriptRef.current = currentFlushed;
+                setCurrentQuestionTranscript(currentFlushed);
+
+                // Update Master Transcript
+                const fullFlushed = `${transcriptsByQuestionRef.current.join(' ')} ${currentFlushed}`.trim();
+                transcriptRef.current = fullFlushed;
+                setTranscript(fullFlushed);
               } else {
                 currentInterim += event.results[i][0].transcript;
               }
@@ -348,12 +362,17 @@ export default function Recording() {
     if ((mediaRecorderRef.current || audioRecorderRef.current) && isRecording) {
       if (recognitionRef.current) {
         try {
-          const flushedTranscript = `${transcriptRef.current} ${interimTranscriptRef.current}`.trim();
-          transcriptRef.current = flushedTranscript;
-          setTranscript(flushedTranscript);
-          interimTranscriptRef.current = '';
-          setInterimTranscript('');
-
+          // Flush any remaining interim to both current and global transcript
+          const finalInterim = interimTranscriptRef.current.trim();
+          if (finalInterim) {
+            const currentFlushed = `${currentQuestionTranscriptRef.current} ${finalInterim}`.trim();
+            currentQuestionTranscriptRef.current = currentFlushed;
+            setCurrentQuestionTranscript(currentFlushed);
+            
+            const fullFlushed = `${transcriptsByQuestionRef.current.join(' ')} ${currentFlushed}`.trim();
+            transcriptRef.current = fullFlushed;
+            setTranscript(fullFlushed);
+          }
           recognitionRef.current.stop();
           recognitionRef.current = null;
         } catch (err) {
@@ -407,6 +426,19 @@ export default function Recording() {
         pollyAudioRef.current.pause();
         pollyAudioRef.current = null;
       }
+      
+      // Save current to completed list
+      if (currentQuestionTranscriptRef.current.trim()) {
+         transcriptsByQuestionRef.current.push(currentQuestionTranscriptRef.current.trim());
+         setTranscriptsByQuestion([...transcriptsByQuestionRef.current]);
+      }
+      
+      // Clear current for the next question
+      currentQuestionTranscriptRef.current = '';
+      setCurrentQuestionTranscript('');
+      interimTranscriptRef.current = '';
+      setInterimTranscript('');
+      
       setPollyState('idle');
       setTtsState('idle');
       setTtsHighlight(null);
@@ -418,6 +450,34 @@ export default function Recording() {
     } else {
       handleStopRecording();
     }
+  };
+
+  const handleRetakeCurrentQuestion = () => {
+    // 1. Clear ONLY the current question's transcript
+    currentQuestionTranscriptRef.current = '';
+    interimTranscriptRef.current = '';
+    setCurrentQuestionTranscript('');
+    setInterimTranscript('');
+    
+    // 2. Re-calculate full transcript without the bad attempt
+    const fullFlushed = transcriptsByQuestionRef.current.join(' ').trim();
+    transcriptRef.current = fullFlushed;
+    setTranscript(fullFlushed);
+    
+    // 3. Reset UI state for recording the current question
+    setRecognitionError(null);
+    setTimeLeft(90);
+    
+    if ('speechSynthesis' in window) {
+      window.speechSynthesis.cancel();
+    }
+    if (pollyAudioRef.current) {
+      pollyAudioRef.current.pause();
+      pollyAudioRef.current = null;
+    }
+    setPollyState('idle');
+    setTtsState('idle');
+    setTtsHighlight(null);
   };
 
   const handleStartOrResume = () => {
@@ -442,7 +502,11 @@ export default function Recording() {
     setRecordedChunks([]);
     transcriptRef.current = '';
     interimTranscriptRef.current = '';
+    currentQuestionTranscriptRef.current = '';
+    transcriptsByQuestionRef.current = [];
+    setTranscriptsByQuestion([]);
     setTranscript('');
+    setCurrentQuestionTranscript('');
     setInterimTranscript('');
     setRecognitionError(null);
     setCurrentQuestionIndex(0);
@@ -749,7 +813,7 @@ export default function Recording() {
                     <p className="text-sm font-medium text-primary mb-2">Listening... Start speaking</p>
                     <div className="h-10 mt-2 flex items-center justify-center max-w-sm mx-auto overflow-hidden">
                       <p className="text-xs italic text-muted-foreground">
-                        {interimTranscript || transcript || "Waiting for audio signal..."}
+                        {interimTranscript || currentQuestionTranscript || "Waiting for audio signal..."}
                       </p>
                     </div>
                   </div>
@@ -780,10 +844,10 @@ export default function Recording() {
                   className="w-full h-full object-cover"
                   style={{ transform: !videoBlob ? 'scaleX(-1)' : undefined }}
                 />
-                {!isAudioOnly && isRecording && (interimTranscript || transcript) && (
+                {!isAudioOnly && isRecording && (interimTranscript || currentQuestionTranscript) && (
                   <div className="absolute bottom-4 left-4 right-4 bg-black/60 backdrop-blur-sm p-3 rounded-lg border border-white/10 text-center shadow-lg animate-in fade-in slide-in-from-bottom-2">
                     <p className="text-sm text-white/90">
-                      {interimTranscript || (transcript.length > 50 ? '...' + transcript.slice(-50) : transcript)}
+                      {interimTranscript || (currentQuestionTranscript.length > 50 ? '...' + currentQuestionTranscript.slice(-50) : currentQuestionTranscript)}
                     </p>
                   </div>
                 )}
@@ -819,16 +883,12 @@ export default function Recording() {
                     {isPaused && (
                       <>
                         <button
-                          onClick={() => {
-                            if (window.confirm("This will restart the entire interview from Question 1. Are you sure you want to retake?")) {
-                              handleRetake();
-                            }
-                          }}
+                          onClick={handleRetakeCurrentQuestion}
                           className="border border-border hover:bg-muted text-foreground text-sm font-medium px-6 py-2.5 rounded-md transition-colors"
                         >
                           Retake
                         </button>
-                        {!isAudioOnly && transcript && (
+                        {!isAudioOnly && currentQuestionTranscript && (
                           <button
                             onClick={() => setShowTranscriptModal(true)}
                             className="border border-primary text-primary hover:bg-primary/5 text-sm font-medium px-4 py-2.5 rounded-md transition-colors flex items-center gap-2"
@@ -933,14 +993,14 @@ export default function Recording() {
         <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
           <div className="bg-background border border-border shadow-lg rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col animate-in zoom-in-95 duration-200">
             <div className="flex items-center justify-between p-4 border-b border-border">
-              <h3 className="text-lg font-medium">Your Recorded Answer</h3>
+              <h3 className="text-lg font-medium">Recorded Answer</h3>
               <button onClick={() => setShowTranscriptModal(false)} className="p-1 hover:bg-muted rounded-md transition-colors text-muted-foreground hover:text-foreground">
                 <X size={20} />
               </button>
             </div>
             <div className="p-6 overflow-y-auto flex-1">
-              {transcript ? (
-                <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{transcript}</p>
+              {currentQuestionTranscript ? (
+                <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{currentQuestionTranscript}</p>
               ) : (
                 <p className="text-sm italic text-muted-foreground text-center py-8">No transcript captured. Ensure your microphone was picking up your voice clearly.</p>
               )}
