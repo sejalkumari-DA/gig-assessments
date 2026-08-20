@@ -2,7 +2,7 @@
 
 import { useState, useRef, useEffect } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Camera, StopCircle, Upload, Loader2, AlertCircle, Video, VideoOff, Mic, MicOff, Volume2, Pause, Play } from "lucide-react";
+import { Camera, StopCircle, Upload, Loader2, AlertCircle, Video, VideoOff, Mic, MicOff, Volume2, Pause, Play, FileText, X } from "lucide-react";
 import { Card } from "@/components/ui/Card";
 import { Accordion } from "@/components/ui/Accordion";
 
@@ -34,6 +34,7 @@ export default function Recording() {
   const [questions, setQuestions] = useState<string[]>([]);
   const [isLoadingQuestions, setIsLoadingQuestions] = useState(true);
   const [ttsState, setTtsState] = useState<'idle' | 'playing' | 'paused'>('idle');
+  const [showTranscriptModal, setShowTranscriptModal] = useState(false);
   const [ttsHighlight, setTtsHighlight] = useState<{ charIndex: number; charLength: number } | null>(null);
   const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
   const [pollyState, setPollyState] = useState<'idle' | 'loading' | 'playing' | 'paused'>('idle');
@@ -105,7 +106,14 @@ export default function Recording() {
         try {
           const data = JSON.parse(text);
           if (data.success && data.questions) {
-            setQuestions(data.questions);
+            const cleanedQuestions = data.questions.map((q: string) => 
+              q.replace(/\\n/g, ' ')
+               .replace(/\n/g, ' ')
+               .replace(/\*\*/g, '')
+               .replace(/\\"/g, '"')
+               .trim()
+            );
+            setQuestions(cleanedQuestions);
             if (data.language) {
               setInterviewLanguage(data.language);
             }
@@ -763,14 +771,23 @@ export default function Recording() {
                 )}
               </div>
             ) : (
-              <video
-                ref={videoRef}
-                autoPlay
-                muted={!videoBlob}
-                playsInline
-                className="w-full h-full object-cover"
-                style={{ transform: !videoBlob ? 'scaleX(-1)' : undefined }}
-              />
+              <div className="relative w-full h-full">
+                <video
+                  ref={videoRef}
+                  autoPlay
+                  muted={!videoBlob}
+                  playsInline
+                  className="w-full h-full object-cover"
+                  style={{ transform: !videoBlob ? 'scaleX(-1)' : undefined }}
+                />
+                {!isAudioOnly && isRecording && (interimTranscript || transcript) && (
+                  <div className="absolute bottom-4 left-4 right-4 bg-black/60 backdrop-blur-sm p-3 rounded-lg border border-white/10 text-center shadow-lg animate-in fade-in slide-in-from-bottom-2">
+                    <p className="text-sm text-white/90">
+                      {interimTranscript || (transcript.length > 50 ? '...' + transcript.slice(-50) : transcript)}
+                    </p>
+                  </div>
+                )}
+              </div>
             )}
 
             {isRecording && (
@@ -800,16 +817,26 @@ export default function Recording() {
                 ) : (
                   <>
                     {isPaused && (
-                      <button
-                        onClick={() => {
-                          if (window.confirm("This will restart the entire interview from Question 1. Are you sure you want to retake?")) {
-                            handleRetake();
-                          }
-                        }}
-                        className="border border-border hover:bg-muted text-foreground text-sm font-medium px-6 py-2.5 rounded-md transition-colors"
-                      >
-                        Retake
-                      </button>
+                      <>
+                        <button
+                          onClick={() => {
+                            if (window.confirm("This will restart the entire interview from Question 1. Are you sure you want to retake?")) {
+                              handleRetake();
+                            }
+                          }}
+                          className="border border-border hover:bg-muted text-foreground text-sm font-medium px-6 py-2.5 rounded-md transition-colors"
+                        >
+                          Retake
+                        </button>
+                        {!isAudioOnly && transcript && (
+                          <button
+                            onClick={() => setShowTranscriptModal(true)}
+                            className="border border-primary text-primary hover:bg-primary/5 text-sm font-medium px-4 py-2.5 rounded-md transition-colors flex items-center gap-2"
+                          >
+                            <FileText size={18} /> Review Transcription
+                          </button>
+                        )}
+                      </>
                     )}
                     <button
                       onClick={handleStartOrResume}
@@ -828,6 +855,15 @@ export default function Recording() {
                   >
                     Retake
                   </button>
+                  {!isAudioOnly && transcript && (
+                    <button
+                      onClick={() => setShowTranscriptModal(true)}
+                      disabled={isUploading}
+                      className="border border-primary text-primary hover:bg-primary/5 text-sm font-medium px-4 py-2.5 rounded-md transition-colors flex items-center gap-2 disabled:opacity-50"
+                    >
+                      <FileText size={18} /> Review Transcription
+                    </button>
+                  )}
                   <button
                     onClick={handleUpload}
                     disabled={isUploading}
@@ -892,6 +928,31 @@ export default function Recording() {
         </Card>
         </div>
       </div>
+      
+      {showTranscriptModal && (
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
+          <div className="bg-background border border-border shadow-lg rounded-xl w-full max-w-2xl max-h-[80vh] flex flex-col animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between p-4 border-b border-border">
+              <h3 className="text-lg font-medium">Your Recorded Answer</h3>
+              <button onClick={() => setShowTranscriptModal(false)} className="p-1 hover:bg-muted rounded-md transition-colors text-muted-foreground hover:text-foreground">
+                <X size={20} />
+              </button>
+            </div>
+            <div className="p-6 overflow-y-auto flex-1">
+              {transcript ? (
+                <p className="text-sm leading-relaxed text-foreground whitespace-pre-wrap">{transcript}</p>
+              ) : (
+                <p className="text-sm italic text-muted-foreground text-center py-8">No transcript captured. Ensure your microphone was picking up your voice clearly.</p>
+              )}
+            </div>
+            <div className="p-4 border-t border-border flex justify-end bg-muted/30 rounded-b-xl">
+              <button onClick={() => setShowTranscriptModal(false)} className="bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium px-6 py-2.5 rounded-md transition-colors">
+                Close
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
