@@ -718,9 +718,21 @@ export default function Recording() {
         <Card className="p-5 shadow-sm">
           <h2 className="text-xl font-medium mb-3">Interview Rules & Setup</h2>
           <div className="space-y-3 text-muted-foreground mb-4 text-sm">
-            <p>{isAudioAssessment ? "Welcome to your audio assessment! Here is how the process works:" : "Welcome to your video profile recording! Here is how the process works:"}</p>
+            <p>
+              {isAudioAssessment 
+                ? "Welcome to your audio assessment! Here is how the process works:" 
+                : urlType === 'video-interview'
+                  ? "Welcome to your video interview! Here is how the process works:"
+                  : "Welcome to your video profile recording! Here is how the process works:"}
+            </p>
             <ul className="list-disc pl-5 space-y-2">
-              <li>{isAudioAssessment ? "You will be asked up to 3 personalized questions based on the job description." : "You will be asked up to 3 personalized questions based on your resume."}</li>
+              <li>
+                {isAudioAssessment 
+                  ? "You will be asked up to 3 personalized questions based on the job description." 
+                  : urlType === 'video-interview'
+                    ? "You will be asked up to 5 personalized questions based on your skills and experience."
+                    : "You will be asked up to 3 personalized questions based on your resume."}
+              </li>
               <li>You will have 1 minute and 30 seconds to answer each question.</li>
               <li>The questions will appear one by one. You control when to start recording each question.</li>
               <li>Please ensure you are in a quiet environment{isAudioAssessment ? "." : " with good lighting."}</li>
