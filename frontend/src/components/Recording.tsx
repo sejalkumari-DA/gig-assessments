@@ -598,7 +598,7 @@ export default function Recording() {
       });
 
       // Navigate to the Success page
-      router.push(`/candidate/success`);
+      router.push(`/candidate/success?type=${urlType || ''}`);
     } catch (error: any) {
       alert(error.message || 'Error uploading video.');
       console.error(error);
