@@ -293,6 +293,8 @@ export const generateVideoInterviewQuestions = async (req: Request, res: Respons
   const defaultQuestions = [
     "Could you please introduce yourself and provide a brief overview of your background?",
     "Can you highlight the key skills and experiences that make you a great fit?",
+    "Describe a specific challenge you faced in a past role and how you handled it.",
+    "How do you prioritize your work and ensure you meet deadlines?",
     "What are your career goals and what are you looking for in your next role?"
   ];
 
@@ -348,9 +350,11 @@ export const generateVideoInterviewQuestions = async (req: Request, res: Respons
     if (bedrockClient) {
       const prompt = `You are an expert technical recruiter. Based on the following job description and parsed resume JSON data, generate exactly 5 highly targeted interview questions to evaluate if a candidate is a good fit for this role (${jobTitle}). Do NOT ask the candidate to introduce themselves.
           
-1. The first and second questions should evaluate core required technical or professional skills.
-2. The third and fourth questions should present situational or behavioral scenarios related to the job description.
-3. The fifth question should ask about their experience dealing with a specific challenge related to the role.
+1. The first question should evaluate a core required technical or professional skill.
+2. The second question should evaluate another technical or professional skill.
+3. The third question should present a situational or behavioral scenario related to the job description.
+4. The fourth question should present another situational or behavioral scenario.
+5. The fifth question should ask about their experience dealing with a specific challenge related to the role.
 
 Return ONLY a valid JSON array of strings containing the 5 questions.
 CRITICAL: You MUST properly escape all newlines as \\n inside the JSON strings. Do NOT output raw unescaped line breaks inside the strings. No markdown formatting, no explanations.
